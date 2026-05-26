@@ -2,83 +2,65 @@ services:
   bootimus-db:
     image: postgres:16
     container_name: bootimus-db
+    network_mode: host
     environment:
       POSTGRES_USER: bootimus
       POSTGRES_PASSWORD: bootimus
       POSTGRES_DB: bootimus
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      bootimus_net:
-        ipv4_address: 172.20.0.2
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bootimus"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: always
 
   bootimus:
     build: .
     container_name: bootimus-server
+    network_mode: host
     depends_on:
       bootimus-db:
         condition: service_healthy
     environment:
       BOOTIMUS_DATA_DIR: /data
-      BOOTIMUS_DB_HOST: bootimus-db
+
+      # With host networking, use localhost
+      BOOTIMUS_DB_HOST: 127.0.0.1
       BOOTIMUS_DB_PORT: 5432
       BOOTIMUS_DB_USER: bootimus
       BOOTIMUS_DB_PASSWORD: bootimus
       BOOTIMUS_DB_NAME: bootimus
       BOOTIMUS_DB_SSLMODE: disable
+
       BOOTIMUS_TFTP_PORT: 69
       BOOTIMUS_HTTP_PORT: 8080
       BOOTIMUS_ADMIN_PORT: 8081
+      BOOTIMUS_PROXY_DHCP_ENABLED: "true"
+
       # Uncomment to set a static server address (Recommended)
       # BOOTIMUS_SERVER_ADDR: 192.168.1.100
-      # Uncomment to enable Windows unattended install (SMB share + boot.wim patch).
-      # Also uncomment the 445 port mapping below.
+
+      # Uncomment to enable Windows unattended install (SMB share + boot.wim patch)
       # BOOTIMUS_WINDOWS_SMB_ENABLED: "true"
-    networks:
-      bootimus_net:
-        ipv4_address: 172.20.0.3
-      # Uncomment for bridge networking on host network
-      # host_bridge:
-      #   ipv4_address: 192.168.1.100
-    ports:
-      - "69:69/udp"
-      - "8080:8080/tcp"
-      - "8081:8081/tcp"
-      # Uncomment together with BOOTIMUS_WINDOWS_SMB_ENABLED above.
-      # Windows clients ignore non-445 SMB ports, so this must be 445.
-      # - "445:445/tcp"
+
+    # ports section is unnecessary with host networking
+    # because containers share the host network stack directly
+
     volumes:
       - ./data:/data
+
     cap_add:
       - NET_BIND_SERVICE
-    restart: unless-stopped
+
+    restart: always
+
     # Uncomment to disable database mode
     # command: ["serve", "--db-disable"]
-    # Uncomment to reset the admin password, remember to comment out afterwards
-    # command: ["serve", "--reset-admin-password"]
 
-networks:
-  bootimus_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
-  # Uncomment to use bridged networking with static IP on your LAN
-  # host_bridge:
-  #   driver: macvlan
-  #   driver_opts:
-  #     parent: eth0  # Change to your host network interface (e.g., eth0, ens33, enp0s3)
-  #   ipam:
-  #     config:
-  #       - subnet: 192.168.1.0/24      # Change to your LAN subnet
-  #         gateway: 192.168.1.1         # Change to your LAN gateway
-  #         ip_range: 192.168.1.100/32   # Static IP for bootimus container
+    # Uncomment to reset the admin password
+    # command: ["serve", "--reset-admin-password"]
 
 volumes:
   postgres_data:
